@@ -131,6 +131,7 @@ type SeedOptions = {
   agentRole?: string;
   maxConcurrentRuns?: number;
   heartbeatConfig?: Record<string, unknown>;
+  adapterType?: string;
 };
 
 type SeedResult = {
@@ -228,7 +229,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       name: opts.agentName ?? "ClaudeCoder",
       role: opts.agentRole ?? "engineer",
       status: "active",
-      adapterType: "codex_local",
+      adapterType: opts.adapterType ?? "codex_local",
       adapterConfig: {},
       runtimeConfig: {
         heartbeat: {
@@ -558,6 +559,43 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     expect(wakeup?.payload).toMatchObject({
       heartbeatSkip: {
         reason: expect.stringContaining("No assigned todo or in_progress issue"),
+      },
+    });
+    expect(runRows).toHaveLength(0);
+  });
+
+  it("records a skipped receipt for a generic timer wake on a runner adapter", async () => {
+    const { agentId } = await seedCompanyAndAgent({
+      adapterType: "paperclip_runner",
+      heartbeatConfig: { enabled: true },
+    });
+
+    const run = await heartbeat.wakeup(agentId, {
+      source: "timer",
+      triggerDetail: "system",
+    });
+
+    expect(run).toBeNull();
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
+
+    const [wakeup] = await db
+      .select({
+        status: agentWakeupRequests.status,
+        reason: agentWakeupRequests.reason,
+        payload: agentWakeupRequests.payload,
+      })
+      .from(agentWakeupRequests)
+      .where(eq(agentWakeupRequests.agentId, agentId));
+    const runRows = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns);
+
+    expect(wakeup).toMatchObject({
+      status: "skipped",
+      reason: "heartbeat.timer.runtime_ineligible",
+    });
+    expect(wakeup?.payload).toMatchObject({
+      heartbeatSkip: {
+        adapterType: "paperclip_runner",
+        reason: expect.stringContaining("issue-backed tasks only"),
       },
     });
     expect(runRows).toHaveLength(0);

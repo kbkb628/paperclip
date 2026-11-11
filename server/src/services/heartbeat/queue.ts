@@ -2840,7 +2840,15 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
       !effectiveTaskKey;
     // Old or direct timer producers cannot create a doomed taskless Runner
     // run. Explicit session restoration above can supply a real task scope.
-    if (genericTimerWake && !supportsUnscopedTimerHeartbeat(agent)) return null;
+    if (genericTimerWake && !supportsUnscopedTimerHeartbeat(agent)) {
+      await writeSkippedHeartbeatRequest("heartbeat.timer.runtime_ineligible", {
+        reason:
+          "Paperclip Runner executes issue-backed tasks only; generic interval heartbeats are skipped.",
+        adapterType: agent.adapterType,
+      });
+      await markTimerHeartbeatChecked(agentId, source);
+      return null;
+    }
     const sessionBefore =
       explicitResumeSession?.sessionDisplayId ??
       (await resolveSessionBeforeForWakeup(agent, effectiveTaskKey));
