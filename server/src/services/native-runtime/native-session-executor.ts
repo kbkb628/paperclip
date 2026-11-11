@@ -10371,9 +10371,6 @@ async function executePaperclipNativeSessionAttempt(
             targetKind: input.runnerExecutionTarget?.kind === "remote" ? "remote" : "local",
             coordinatorPhase: coordinator.phase,
             failureDetail: coordinator.failureDetail,
-            resumeClaim: Array.isArray(coordinator.recoveryHistory)
-              ? (coordinator.recoveryHistory.at(-1) as Record<string, unknown> | undefined) ?? null : null,
-            controllerBootId: controller.bootId,
             admittedAttempt: nextAttempt,
           })).allowed;
           const nextControllerGeneration = recovering
